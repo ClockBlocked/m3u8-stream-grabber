@@ -9,26 +9,55 @@ interface ScanResponse {
   error?: string;
 }
 
+const SCAN_RETRY_BASE_DELAY_MS = 300;
+
 export async function scanForM3U8(url: string): Promise<ScanResponse> {
-  try {
-    const { data, error } = await supabase.functions.invoke('scan-m3u8', {
-      body: { url },
-    });
+  const maxAttempts = 3;
+  let lastError: string | undefined;
 
-    if (error) {
-      console.error('Edge function error:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Failed to scan URL' 
-      };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke<ScanResponse>('scan-m3u8', {
+        body: { url },
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        lastError = error.message || 'Failed to scan URL';
+
+        // Retry on transient errors (5xx)
+        if (error.status && error.status >= 500 && attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
+          continue;
+        }
+
+        return { success: false, error: lastError };
+      }
+
+      if (data?.success) {
+        return data;
+      }
+
+      lastError = data?.error || 'Scan failed';
+
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
+        continue;
+      }
+
+      return { success: false, error: lastError };
+    } catch (error) {
+      console.error('Scan error:', error);
+      lastError = error instanceof Error ? error.message : 'Failed to scan URL';
+
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
+        continue;
+      }
+
+      return { success: false, error: lastError };
     }
-
-    return data as ScanResponse;
-  } catch (error) {
-    console.error('Scan error:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to scan URL' 
-    };
   }
+
+  return { success: false, error: lastError || 'Failed to scan URL' };
 }
