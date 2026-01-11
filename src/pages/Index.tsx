@@ -13,11 +13,13 @@ const Index = () => {
   const [streams, setStreams] = useState<VideoStream[]>([]);
   const [selectedStream, setSelectedStream] = useState<VideoStream | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [scannedUrl, setScannedUrl] = useState<string>("");
 
   const handleScan = async (url: string) => {
     setIsScanning(true);
     setStreams([]);
     setHasScanned(true);
+    setScannedUrl(url);
 
     try {
       const result = await scanForM3U8(url);
@@ -141,6 +143,7 @@ const Index = () => {
       <VideoDrawer
         stream={selectedStream}
         onClose={() => setSelectedStream(null)}
+        scannedUrl={scannedUrl}
       />
     </div>
   );

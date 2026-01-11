@@ -9,9 +9,10 @@ import { HLSPlayer } from "./HLSPlayer";
 interface VideoDrawerProps {
   stream: VideoStream | null;
   onClose: () => void;
+  scannedUrl?: string;
 }
 
-export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
+export const VideoDrawer = ({ stream, onClose, scannedUrl }: VideoDrawerProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -88,6 +89,7 @@ export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
                   src={stream.url} 
                   resolution={stream.resolution}
                   type={stream.type}
+                  referer={scannedUrl}
                 />
               </div>
 
