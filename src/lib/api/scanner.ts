@@ -9,6 +9,8 @@ interface ScanResponse {
   error?: string;
 }
 
+const SCAN_RETRY_BASE_DELAY_MS = 300;
+
 export async function scanForM3U8(url: string): Promise<ScanResponse> {
   const maxAttempts = 3;
   let lastError: string | undefined;
@@ -25,7 +27,7 @@ export async function scanForM3U8(url: string): Promise<ScanResponse> {
 
         // Retry on transient errors (5xx)
         if (error.status && error.status >= 500 && attempt < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 300 * Math.pow(2, attempt - 1)));
+          await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
           continue;
         }
 
@@ -39,7 +41,7 @@ export async function scanForM3U8(url: string): Promise<ScanResponse> {
       lastError = data?.error || 'Scan failed';
 
       if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 300 * Math.pow(2, attempt - 1)));
+        await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
         continue;
       }
 

@@ -25,6 +25,8 @@ const userAgents = [
 const MIN_DELAY_MS = 100;
 const MAX_RANDOM_DELAY_MS = 400;
 const BASE_BACKOFF_MS = 200;
+const MAX_BASE64_MATCHES = 50;
+const BASE64_ALLOWED_REGEX = /^[A-Za-z0-9+/]*={0,2}$/;
 
 function getRandomUserAgent(): string {
   return userAgents[Math.floor(Math.random() * userAgents.length)];
@@ -205,10 +207,14 @@ Deno.serve(async (req) => {
       }
 
       // Base64 encoded M3U8 URLs within JavaScript (e.g., atob calls)
+      let processedBase64 = 0;
       for (const match of content.matchAll(base64Pattern)) {
+        if (processedBase64++ >= MAX_BASE64_MATCHES) {
+          break;
+        }
         try {
           const encoded = match[1];
-          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+          if (!BASE64_ALLOWED_REGEX.test(encoded)) {
             continue;
           }
           const decoded = atob(encoded);
