@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       /https?%3A%2F%2F[^"'\s]+\.m3u8[^"'\s]*/gi,
     ];
 
-    const addM3U8Url = (candidate: string) => {
+    const processM3U8Candidate = (candidate: string) => {
       let m3u8Url = candidate.replace(/['"]/g, '').trim();
       
       if (!m3u8Url) return;
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         const matches = content.matchAll(pattern);
         for (const match of matches) {
           const candidate = match[1] || match[0];
-          addM3U8Url(candidate);
+          processM3U8Candidate(candidate);
         }
       }
 
@@ -208,13 +208,13 @@ Deno.serve(async (req) => {
       for (const match of content.matchAll(base64Pattern)) {
         try {
           const encoded = match[1];
-          if (!/^[A-Za-z0-9+/=]+$/.test(encoded)) {
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
             continue;
           }
           const decoded = atob(encoded);
           const decodedMatches = decoded.match(/https?:\/\/[^\s"'<>\\]+\.m3u8(?:\?[^\s"'<>\\]*)?/gi);
           if (decodedMatches) {
-            decodedMatches.forEach(addM3U8Url);
+            decodedMatches.forEach(processM3U8Candidate);
           }
         } catch {
           // Ignore base64 decoding errors
@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
 
     // Look for M3U8 URLs in JSON blobs inside scripts
     for (const match of normalizedHtml.matchAll(/"([^"]*\.m3u8[^"]*)"/gi)) {
-      addM3U8Url(match[1]);
+      processM3U8Candidate(match[1]);
     }
 
     console.log(`Found ${foundUrls.size} unique M3U8 URLs`);

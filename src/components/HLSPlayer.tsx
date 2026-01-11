@@ -11,6 +11,8 @@ interface HLSPlayerProps {
   referer?: string;
 }
 
+const COPY_FEEDBACK_DURATION = 2000;
+
 export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -193,7 +195,7 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
       if (copyResetTimeout.current) {
         clearTimeout(copyResetTimeout.current);
       }
-      copyResetTimeout.current = setTimeout(() => setCopiedFallback(false), 2000);
+      copyResetTimeout.current = setTimeout(() => setCopiedFallback(false), COPY_FEEDBACK_DURATION);
     } catch {
       setError((prev) => prev || "Copy failed. Please copy the URL manually.");
     }

@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
           absoluteUrl = trimmed;
         } else if (trimmed.startsWith('?')) {
-          absoluteUrl = m3u8Url.split('?')[0] + trimmed;
+          absoluteUrl = new URL(trimmed, m3u8Url.split('?')[0]).toString();
         } else if (trimmed.startsWith('/')) {
           absoluteUrl = origin + trimmed;
         } else {
