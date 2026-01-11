@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
       'Accept': '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
       'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
       'Sec-Ch-Ua-Mobile': '?0',
       'Sec-Ch-Ua-Platform': '"Windows"',
@@ -90,13 +91,30 @@ Deno.serve(async (req) => {
     }
 
     const contentType = response.headers.get('content-type') || 'application/vnd.apple.mpegurl';
+    const isSegmentRequest = targetUrl.pathname.toLowerCase().endsWith('.ts') || contentType.toLowerCase().includes('video');
+
+    if (isSegmentRequest) {
+      const buffer = await response.arrayBuffer();
+      return new Response(buffer, {
+        status: response.status,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'video/MP2T',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      });
+    }
+
     let content = await response.text();
 
     // If this is an M3U8 file, rewrite URLs to go through our proxy
     if (contentType.includes('mpegurl') || contentType.includes('m3u8') || m3u8Url.includes('.m3u8')) {
       const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
       // Force HTTPS for the proxy base URL
-      const proxyBase = reqUrl.origin.replace('http://', 'https://') + reqUrl.pathname;
+      const proxyBase = new URL(reqUrl.origin.replace('http://', 'https://') + reqUrl.pathname);
+      const baseParams = new URLSearchParams(reqUrl.search);
+      baseParams.delete('url');
+      baseParams.delete('referer');
       
       // Rewrite relative URLs to absolute, then proxy them
       const lines = content.split('\n');
@@ -112,17 +130,21 @@ Deno.serve(async (req) => {
         let absoluteUrl: string;
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
           absoluteUrl = trimmed;
+        } else if (trimmed.startsWith('?')) {
+          absoluteUrl = m3u8Url.split('?')[0] + trimmed;
         } else if (trimmed.startsWith('/')) {
           absoluteUrl = origin + trimmed;
         } else {
-          absoluteUrl = baseUrl + trimmed;
-        }
-        
-        // For .ts segment files, proxy them too
-        // For .m3u8 variant files, proxy them as well
-        const encodedUrl = encodeURIComponent(absoluteUrl);
-        const refererParam = referer ? `&referer=${encodeURIComponent(referer)}` : `&referer=${encodeURIComponent(m3u8Url)}`;
-        return `${proxyBase}?url=${encodedUrl}${refererParam}`;
+         absoluteUrl = baseUrl + trimmed;
+       }
+       
+       // For .ts segment files, proxy them too
+       // For .m3u8 variant files, proxy them as well
+        const params = new URLSearchParams(baseParams);
+        params.set('url', absoluteUrl);
+        params.set('referer', referer ? referer : m3u8Url);
+        proxyBase.search = '';
+        return `${proxyBase.toString()}?${params.toString()}`;
       });
       
       content = rewrittenLines.join('\n');

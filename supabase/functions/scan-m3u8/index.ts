@@ -26,6 +26,24 @@ function getRandomUserAgent(): string {
   return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function collectCookies(headers: Headers): string | undefined {
+  const rawCookies =
+    ((headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() as string[] | undefined) ||
+    (headers.get('set-cookie') ? headers.get('set-cookie')!.split(/,(?=[^;]+=[^;]+)/) : []);
+
+  if (!rawCookies || rawCookies.length === 0) return undefined;
+
+  const pairs = rawCookies
+    .map((cookie) => cookie.split(';')[0]?.trim())
+    .filter(Boolean);
+
+  return pairs.length ? pairs.join('; ') : undefined;
+}
+
 function getBrowserHeaders(targetUrl: string): Record<string, string> {
   const url = new URL(targetUrl);
   return {
@@ -35,6 +53,8 @@ function getBrowserHeaders(targetUrl: string): Record<string, string> {
     'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
+    'Connection': 'keep-alive',
+    'DNT': '1',
     'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
@@ -48,7 +68,7 @@ function getBrowserHeaders(targetUrl: string): Record<string, string> {
   };
 }
 
-function getM3U8Headers(m3u8Url: string, pageUrl: string): Record<string, string> {
+function getM3U8Headers(m3u8Url: string, pageUrl: string, cookies?: string): Record<string, string> {
   const m3u8Origin = new URL(m3u8Url).origin;
   const pageOrigin = new URL(pageUrl).origin;
   
@@ -59,12 +79,15 @@ function getM3U8Headers(m3u8Url: string, pageUrl: string): Record<string, string
     'Accept-Encoding': 'gzip, deflate, br',
     'Referer': pageUrl,
     'Origin': pageOrigin,
+    'Connection': 'keep-alive',
+    'DNT': '1',
     'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
     'Sec-Fetch-Dest': 'empty',
     'Sec-Fetch-Mode': 'cors',
     'Sec-Fetch-Site': m3u8Origin === pageOrigin ? 'same-origin' : 'cross-site',
+    ...(cookies ? { 'Cookie': cookies } : {}),
   };
 }
 
@@ -100,8 +123,13 @@ Deno.serve(async (req) => {
     }
 
     const html = await response.text();
+    const normalizedHtml = html.replace(/\\\//g, '/');
+    const cookieHeader = collectCookies(response.headers);
     const streams: M3U8Stream[] = [];
     const foundUrls = new Set<string>();
+    const htmlVariants = [html, normalizedHtml];
+
+    const base64Pattern = /atob\s*\(\s*["']([^"']+)["']\s*\)/gi;
 
     // Multiple regex patterns to find M3U8 URLs
     const patterns = [
@@ -124,40 +152,68 @@ Deno.serve(async (req) => {
       /manifest(?:Url|URL|url)\s*[:=]\s*["']([^"']*\.m3u8[^"']*)["']/gi,
       // URL encoded patterns
       /https?%3A%2F%2F[^"'\s]+\.m3u8[^"'\s]*/gi,
-      // Base64 encoded check (decode and search)
-      /atob\s*\(\s*["']([^"']+)["']\s*\)/gi,
     ];
 
-    // Extract URLs using all patterns
-    for (const pattern of patterns) {
-      const matches = html.matchAll(pattern);
-      for (const match of matches) {
-        // Get the URL (either full match or first capture group)
-        let m3u8Url = match[1] || match[0];
-        
-        // Clean up the URL
-        m3u8Url = m3u8Url.replace(/['"]/g, '').trim();
-        
-        // Skip if empty or already found
-        if (!m3u8Url || foundUrls.has(m3u8Url)) continue;
-        
-        // Make relative URLs absolute
-        if (m3u8Url.startsWith('//')) {
-          m3u8Url = 'https:' + m3u8Url;
-        } else if (m3u8Url.startsWith('/')) {
-          const baseUrl = new URL(url);
-          m3u8Url = baseUrl.origin + m3u8Url;
-        } else if (!m3u8Url.startsWith('http')) {
-          const baseUrl = new URL(url);
-          const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/') + 1);
-          m3u8Url = baseUrl.origin + basePath + m3u8Url;
-        }
+    const addM3U8Url = (candidate: string) => {
+      let m3u8Url = candidate.replace(/['"]/g, '').trim();
+      
+      if (!m3u8Url) return;
 
-        // Validate it looks like an M3U8 URL
-        if (!m3u8Url.includes('.m3u8')) continue;
-        
-        foundUrls.add(m3u8Url);
+      try {
+        if (/%[0-9A-Fa-f]{2}/.test(m3u8Url)) {
+          m3u8Url = decodeURIComponent(m3u8Url);
+        }
+      } catch {
+        // Ignore decoding errors
       }
+
+      m3u8Url = m3u8Url.replace(/\\\//g, '/');
+      
+      if (!m3u8Url || foundUrls.has(m3u8Url)) return;
+      
+      if (m3u8Url.startsWith('//')) {
+        m3u8Url = 'https:' + m3u8Url;
+      } else if (m3u8Url.startsWith('/')) {
+        const baseUrl = new URL(url);
+        m3u8Url = baseUrl.origin + m3u8Url;
+      } else if (!m3u8Url.startsWith('http')) {
+        const baseUrl = new URL(url);
+        const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/') + 1);
+        m3u8Url = baseUrl.origin + basePath + m3u8Url;
+      }
+
+      if (!m3u8Url.includes('.m3u8')) return;
+      
+      foundUrls.add(m3u8Url);
+    };
+
+    // Extract URLs using all patterns on html variants
+    for (const content of htmlVariants) {
+      for (const pattern of patterns) {
+        const matches = content.matchAll(pattern);
+        for (const match of matches) {
+          const candidate = match[1] || match[0];
+          addM3U8Url(candidate);
+        }
+      }
+
+      // Base64 encoded M3U8 URLs within JavaScript (e.g., atob calls)
+      for (const match of content.matchAll(base64Pattern)) {
+        try {
+          const decoded = atob(match[1]);
+          const decodedMatches = decoded.match(/https?:\/\/[^\s"'<>\\]+\.m3u8(?:\?[^\s"'<>\\]*)?/gi);
+          if (decodedMatches) {
+            decodedMatches.forEach(addM3U8Url);
+          }
+        } catch {
+          // Ignore base64 decoding errors
+        }
+      }
+    }
+
+    // Look for M3U8 URLs in JSON blobs inside scripts
+    for (const match of normalizedHtml.matchAll(/"([^"]*\.m3u8[^"]*)"/gi)) {
+      addM3U8Url(match[1]);
     }
 
     console.log(`Found ${foundUrls.size} unique M3U8 URLs`);
@@ -166,7 +222,7 @@ Deno.serve(async (req) => {
     let streamIndex = 0;
     for (const m3u8Url of foundUrls) {
       try {
-        const streamInfo = await analyzeM3U8(m3u8Url, url);
+        const streamInfo = await analyzeM3U8(m3u8Url, url, cookieHeader);
         streams.push({
           id: `stream-${++streamIndex}`,
           url: m3u8Url,
@@ -209,63 +265,81 @@ Deno.serve(async (req) => {
   }
 });
 
-async function analyzeM3U8(url: string, pageUrl: string): Promise<Partial<M3U8Stream>> {
-  const response = await fetch(url, {
-    headers: getM3U8Headers(url, pageUrl),
-    redirect: 'follow',
-  });
+async function analyzeM3U8(url: string, pageUrl: string, cookies?: string): Promise<Partial<M3U8Stream>> {
+  const maxAttempts = 3;
+  let lastError: unknown;
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch M3U8: ${response.status}`);
-  }
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await delay(Math.random() * 400 + 100);
 
-  const content = await response.text();
-  const lines = content.split('\n');
+      const response = await fetch(url, {
+        headers: getM3U8Headers(url, pageUrl, cookies),
+        redirect: 'follow',
+      });
 
-  let isMaster = false;
-  let resolution: string | undefined;
-  let bandwidth: string | undefined;
-  let segmentCount = 0;
-  let totalDuration = 0;
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    // Check if it's a master playlist
-    if (trimmedLine.startsWith('#EXT-X-STREAM-INF')) {
-      isMaster = true;
-      
-      // Extract resolution
-      const resMatch = trimmedLine.match(/RESOLUTION=(\d+x\d+)/i);
-      if (resMatch) {
-        resolution = resMatch[1];
+      if (!response.ok) {
+        throw new Error(`Failed to fetch M3U8: ${response.status}`);
       }
-      
-      // Extract bandwidth
-      const bwMatch = trimmedLine.match(/BANDWIDTH=(\d+)/i);
-      if (bwMatch) {
-        const bw = parseInt(bwMatch[1]);
-        bandwidth = formatBandwidth(bw);
+
+      const content = await response.text();
+      const lines = content.split('\n');
+
+      let isMaster = false;
+      let resolution: string | undefined;
+      let bandwidth: string | undefined;
+      let segmentCount = 0;
+      let totalDuration = 0;
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        // Check if it's a master playlist
+        if (trimmedLine.startsWith('#EXT-X-STREAM-INF')) {
+          isMaster = true;
+          
+          // Extract resolution
+          const resMatch = trimmedLine.match(/RESOLUTION=(\d+x\d+)/i);
+          if (resMatch) {
+            resolution = resMatch[1];
+          }
+          
+          // Extract bandwidth
+          const bwMatch = trimmedLine.match(/BANDWIDTH=(\d+)/i);
+          if (bwMatch) {
+            const bw = parseInt(bwMatch[1]);
+            bandwidth = formatBandwidth(bw);
+          }
+        }
+
+        // Count segments
+        if (trimmedLine.startsWith('#EXTINF:')) {
+          segmentCount++;
+          const durationMatch = trimmedLine.match(/#EXTINF:([\d.]+)/);
+          if (durationMatch) {
+            totalDuration += parseFloat(durationMatch[1]);
+          }
+        }
+      }
+
+      return {
+        type: isMaster ? 'master' : 'variant',
+        resolution,
+        bandwidth,
+        segments: segmentCount > 0 ? segmentCount : undefined,
+        duration: totalDuration > 0 ? formatDuration(totalDuration) : undefined,
+      };
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        const backoff = 200 * Math.pow(2, attempt - 1);
+        await delay(backoff);
+        continue;
       }
     }
-
-    // Count segments
-    if (trimmedLine.startsWith('#EXTINF:')) {
-      segmentCount++;
-      const durationMatch = trimmedLine.match(/#EXTINF:([\d.]+)/);
-      if (durationMatch) {
-        totalDuration += parseFloat(durationMatch[1]);
-      }
-    }
   }
 
-  return {
-    type: isMaster ? 'master' : 'variant',
-    resolution,
-    bandwidth,
-    segments: segmentCount > 0 ? segmentCount : undefined,
-    duration: totalDuration > 0 ? formatDuration(totalDuration) : undefined,
-  };
+  throw lastError instanceof Error ? lastError : new Error('Failed to fetch M3U8');
 }
 
 function formatBandwidth(bps: number): string {

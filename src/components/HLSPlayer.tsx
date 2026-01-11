@@ -22,6 +22,8 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [proxiedUrl, setProxiedUrl] = useState("");
+  const [copiedFallback, setCopiedFallback] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -39,6 +41,7 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
 
     // Get the proxied URL to bypass CORS
     const proxiedSrc = getProxiedM3U8Url(src, referer);
+    setProxiedUrl(proxiedSrc);
     console.log('Loading proxied stream:', proxiedSrc);
 
     if (Hls.isSupported()) {
@@ -178,6 +181,17 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
     video.currentTime = percent * duration;
   };
 
+  const handleCopyToVLC = async () => {
+    const fallbackUrl = proxiedUrl || src;
+    try {
+      await navigator.clipboard.writeText(fallbackUrl);
+      setCopiedFallback(true);
+      setTimeout(() => setCopiedFallback(false), 2000);
+    } catch {
+      setError((prev) => prev || "Copy failed. Please copy the URL manually.");
+    }
+  };
+
   const formatTime = (seconds: number) => {
     if (!isFinite(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
@@ -231,10 +245,23 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
       {/* Error state */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-          <div className="text-center px-4">
-            <AlertCircle className="w-10 h-10 text-destructive mx-auto mb-2" />
-            <p className="text-sm text-foreground mb-1">Playback Error</p>
-            <p className="text-xs text-muted-foreground max-w-xs">{error}</p>
+          <div className="text-center px-4 space-y-3">
+            <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
+            <div>
+              <p className="text-sm text-foreground mb-1">Playback Error</p>
+              <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                {error}
+              </p>
+            </div>
+            <button
+              onClick={handleCopyToVLC}
+              className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-primary/80 text-primary-foreground text-xs hover:bg-primary"
+            >
+              Copy URL to VLC
+            </button>
+            {copiedFallback && (
+              <p className="text-[11px] text-foreground">Copied! Paste into VLC or another player.</p>
+            )}
           </div>
         </div>
       )}
