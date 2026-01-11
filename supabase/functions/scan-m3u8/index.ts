@@ -31,9 +31,12 @@ function delay(ms: number) {
 }
 
 function collectCookies(headers: Headers): string | undefined {
+  const headerWithCookies = headers as unknown as { getSetCookie?: () => string[] | undefined };
+  const setCookieValues = typeof headerWithCookies.getSetCookie === 'function' ? headerWithCookies.getSetCookie() : undefined;
+  const cookieHeader = headers.get('set-cookie');
   const rawCookies =
-    ((headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() as string[] | undefined) ||
-    (headers.get('set-cookie') ? headers.get('set-cookie')!.split(/,(?=[^;]+=[^;]+)/) : []);
+    (setCookieValues && setCookieValues.length ? setCookieValues : undefined) ||
+    (cookieHeader ? cookieHeader.split(/,(?=[^;]+=[^;]+)/) : []);
 
   if (!rawCookies || rawCookies.length === 0) return undefined;
 
@@ -160,7 +163,7 @@ Deno.serve(async (req) => {
       if (!m3u8Url) return;
 
       try {
-        if (/%[0-9A-Fa-f]{2}/.test(m3u8Url)) {
+        if (/(?:https?:)?%3A%2F%2F|%2F|%3F/i.test(m3u8Url)) {
           m3u8Url = decodeURIComponent(m3u8Url);
         }
       } catch {

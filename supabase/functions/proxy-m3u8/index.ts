@@ -91,7 +91,8 @@ Deno.serve(async (req) => {
     }
 
     const contentType = response.headers.get('content-type') || 'application/vnd.apple.mpegurl';
-    const isSegmentRequest = targetUrl.pathname.toLowerCase().endsWith('.ts') || contentType.toLowerCase().includes('video');
+    const lowerPath = targetUrl.pathname.toLowerCase();
+    const isSegmentRequest = lowerPath.endsWith('.ts') || lowerPath.endsWith('.m4s') || lowerPath.endsWith('.fmp4') || contentType.toLowerCase().includes('video');
 
     if (isSegmentRequest) {
       const buffer = await response.arrayBuffer();

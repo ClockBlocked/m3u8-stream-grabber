@@ -14,6 +14,7 @@ interface HLSPlayerProps {
 export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const copyResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -110,6 +111,9 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+      if (copyResetTimeout.current) {
+        clearTimeout(copyResetTimeout.current);
+      }
     };
   }, [src, referer]);
 
@@ -186,7 +190,10 @@ export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) =>
     try {
       await navigator.clipboard.writeText(fallbackUrl);
       setCopiedFallback(true);
-      setTimeout(() => setCopiedFallback(false), 2000);
+      if (copyResetTimeout.current) {
+        clearTimeout(copyResetTimeout.current);
+      }
+      copyResetTimeout.current = setTimeout(() => setCopiedFallback(false), 2000);
     } catch {
       setError((prev) => prev || "Copy failed. Please copy the URL manually.");
     }
