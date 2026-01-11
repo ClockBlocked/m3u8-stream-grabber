@@ -1,4 +1,3 @@
-import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { Play, FileVideo, Clock, Layers } from "lucide-react";
 
@@ -19,11 +18,9 @@ interface VideoResultProps {
   isSelected: boolean;
 }
 
-export const VideoResult = forwardRef<HTMLDivElement, VideoResultProps>(
-  ({ stream, index, onSelect, isSelected }, ref) => {
+export const VideoResult = ({ stream, index, onSelect, isSelected }: VideoResultProps) => {
   return (
     <motion.div
-      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.1 }}
@@ -96,6 +93,4 @@ export const VideoResult = forwardRef<HTMLDivElement, VideoResultProps>(
       </div>
     </motion.div>
   );
-});
-
-VideoResult.displayName = "VideoResult";
+};

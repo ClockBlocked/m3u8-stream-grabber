@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Play, Pause, Volume2, VolumeX, Maximize, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -11,8 +11,7 @@ interface HLSPlayerProps {
   referer?: string;
 }
 
-export const HLSPlayer = forwardRef<HTMLVideoElement, HLSPlayerProps>(
-  ({ src, resolution, type, referer }, ref) => {
+export const HLSPlayer = ({ src, resolution, type, referer }: HLSPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,9 +46,8 @@ export const HLSPlayer = forwardRef<HTMLVideoElement, HLSPlayerProps>(
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 90,
-        // Use anonymous key for XHR requests
-        xhrSetup: (xhr, url) => {
-          // The proxy handles authentication, so we just need basic setup
+        // The proxy handles everything, no credentials needed
+        xhrSetup: (xhr) => {
           xhr.withCredentials = false;
         },
       });
@@ -313,6 +311,4 @@ export const HLSPlayer = forwardRef<HTMLVideoElement, HLSPlayerProps>(
       </motion.div>
     </div>
   );
-});
-
-HLSPlayer.displayName = "HLSPlayer";
+};
