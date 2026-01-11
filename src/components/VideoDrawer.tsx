@@ -1,9 +1,10 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Download, Copy, ExternalLink, Play, Pause, CheckCircle, Info } from "lucide-react";
+import { X, Download, Copy, ExternalLink, CheckCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VideoStream } from "./VideoResult";
 import { useState } from "react";
 import { toast } from "sonner";
+import { HLSPlayer } from "./HLSPlayer";
 
 interface VideoDrawerProps {
   stream: VideoStream | null;
@@ -11,7 +12,6 @@ interface VideoDrawerProps {
 }
 
 export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -54,21 +54,21 @@ export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 gradient-card border-t border-border rounded-t-2xl overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-50 gradient-card border-t border-border rounded-t-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
           >
             {/* Handle */}
-            <div className="flex justify-center py-3">
+            <div className="flex justify-center py-3 sticky top-0 bg-inherit z-10">
               <div className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>
 
             <div className="px-6 pb-8">
               {/* Header */}
-              <div className="flex items-start justify-between mb-6">
-                <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-foreground mb-1">
-                    Stream Details
+                    Stream Preview
                   </h3>
-                  <p className="text-sm text-muted-foreground font-mono truncate max-w-md">
+                  <p className="text-sm text-muted-foreground font-mono truncate">
                     {stream.url}
                   </p>
                 </div>
@@ -76,45 +76,23 @@ export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground shrink-0 ml-4"
                 >
                   <X className="w-5 h-5" />
                 </Button>
               </div>
 
-              {/* Preview Area */}
-              <div className="relative aspect-video max-w-2xl mx-auto mb-6 rounded-xl overflow-hidden bg-muted/50 border border-border">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Play className="w-8 h-8 text-primary ml-1" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      M3U8 Preview
-                    </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">
-                      Use an HLS player to preview this stream
-                    </p>
-                  </div>
-                </div>
-
-                {/* Stream info overlay */}
-                <div className="absolute top-4 left-4 flex gap-2">
-                  {stream.resolution && (
-                    <span className="px-2 py-1 text-xs font-mono bg-background/80 backdrop-blur rounded text-foreground">
-                      {stream.resolution}
-                    </span>
-                  )}
-                  {stream.type === "master" && (
-                    <span className="px-2 py-1 text-xs font-mono bg-primary/80 backdrop-blur rounded text-primary-foreground">
-                      Master
-                    </span>
-                  )}
-                </div>
+              {/* HLS Player */}
+              <div className="max-w-3xl mx-auto mb-6">
+                <HLSPlayer 
+                  src={stream.url} 
+                  resolution={stream.resolution}
+                  type={stream.type}
+                />
               </div>
 
               {/* Info Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-2xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 max-w-3xl mx-auto">
                 <div className="p-3 rounded-lg bg-muted/30 border border-border">
                   <p className="text-xs text-muted-foreground mb-1">Type</p>
                   <p className="text-sm font-medium text-foreground capitalize">
@@ -142,7 +120,7 @@ export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-wrap justify-center gap-3 max-w-2xl mx-auto">
+              <div className="flex flex-wrap justify-center gap-3 max-w-3xl mx-auto">
                 <Button
                   onClick={handleCopy}
                   variant="outline"
@@ -180,7 +158,7 @@ export const VideoDrawer = ({ stream, onClose }: VideoDrawerProps) => {
               </div>
 
               {/* Tip */}
-              <div className="mt-6 max-w-2xl mx-auto">
+              <div className="mt-6 max-w-3xl mx-auto">
                 <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                   <div className="text-sm text-foreground/80">
