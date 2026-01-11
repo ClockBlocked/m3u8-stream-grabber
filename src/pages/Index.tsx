@@ -6,45 +6,7 @@ import { VideoResult, VideoStream } from "@/components/VideoResult";
 import { VideoDrawer } from "@/components/VideoDrawer";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "sonner";
-
-// Mock data for demonstration
-const mockStreams: VideoStream[] = [
-  {
-    id: "1",
-    url: "https://example.com/video/master.m3u8",
-    type: "master",
-    resolution: "Adaptive",
-    segments: 156,
-    duration: "1:32:45",
-  },
-  {
-    id: "2",
-    url: "https://example.com/video/1080p.m3u8",
-    type: "variant",
-    resolution: "1920x1080",
-    bandwidth: "5.2 Mbps",
-    segments: 156,
-    duration: "1:32:45",
-  },
-  {
-    id: "3",
-    url: "https://example.com/video/720p.m3u8",
-    type: "variant",
-    resolution: "1280x720",
-    bandwidth: "2.8 Mbps",
-    segments: 156,
-    duration: "1:32:45",
-  },
-  {
-    id: "4",
-    url: "https://example.com/video/480p.m3u8",
-    type: "variant",
-    resolution: "854x480",
-    bandwidth: "1.4 Mbps",
-    segments: 156,
-    duration: "1:32:45",
-  },
-];
+import { scanForM3U8 } from "@/lib/api/scanner";
 
 const Index = () => {
   const [isScanning, setIsScanning] = useState(false);
@@ -57,14 +19,25 @@ const Index = () => {
     setStreams([]);
     setHasScanned(true);
 
-    // Simulate scanning delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const result = await scanForM3U8(url);
 
-    // In a real implementation, this would call a backend to scan the URL
-    // For demo, we'll show mock data
-    setStreams(mockStreams);
-    setIsScanning(false);
-    toast.success(`Found ${mockStreams.length} M3U8 streams!`);
+      if (result.success && result.streams) {
+        setStreams(result.streams);
+        if (result.streams.length > 0) {
+          toast.success(`Found ${result.streams.length} M3U8 stream${result.streams.length > 1 ? 's' : ''}!`);
+        } else {
+          toast.info("No M3U8 streams found on this page");
+        }
+      } else {
+        toast.error(result.error || "Failed to scan URL");
+      }
+    } catch (error) {
+      console.error('Scan error:', error);
+      toast.error("Failed to scan URL. Please try again.");
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleSelectStream = (stream: VideoStream) => {
