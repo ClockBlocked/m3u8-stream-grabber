@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef } from "react";
 import Hls from "hls.js";
 import { Play, Pause, Volume2, VolumeX, Maximize, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { getProxiedM3U8Url } from "@/lib/api/proxy";
 
 interface HLSPlayerProps {
   src: string;
   resolution?: string;
   type?: "master" | "variant";
+  referer?: string;
 }
 
-export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
+export const HLSPlayer = forwardRef<HTMLVideoElement, HLSPlayerProps>(
+  ({ src, resolution, type, referer }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -35,16 +38,25 @@ export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
       hlsRef.current = null;
     }
 
+    // Get the proxied URL to bypass CORS
+    const proxiedSrc = getProxiedM3U8Url(src, referer);
+    console.log('Loading proxied stream:', proxiedSrc);
+
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 90,
+        // Use anonymous key for XHR requests
+        xhrSetup: (xhr, url) => {
+          // The proxy handles authentication, so we just need basic setup
+          xhr.withCredentials = false;
+        },
       });
 
       hlsRef.current = hls;
 
-      hls.loadSource(src);
+      hls.loadSource(proxiedSrc);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -59,10 +71,11 @@ export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
+        console.error('HLS Error:', data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              setError("Network error - stream may be unavailable or blocked by CORS");
+              setError("Network error - stream may be unavailable");
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               setError("Media error - trying to recover...");
@@ -77,7 +90,7 @@ export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native HLS support (Safari)
-      video.src = src;
+      video.src = proxiedSrc;
       video.addEventListener("loadedmetadata", () => {
         setIsLoading(false);
         video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
@@ -97,7 +110,7 @@ export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
         hlsRef.current = null;
       }
     };
-  }, [src]);
+  }, [src, referer]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -300,4 +313,6 @@ export const HLSPlayer = ({ src, resolution, type }: HLSPlayerProps) => {
       </motion.div>
     </div>
   );
-};
+});
+
+HLSPlayer.displayName = "HLSPlayer";
