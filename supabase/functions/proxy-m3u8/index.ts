@@ -116,6 +116,7 @@ Deno.serve(async (req) => {
       const baseParams = new URLSearchParams(reqUrl.search);
       baseParams.delete('url');
       baseParams.delete('referer');
+      const baseWithoutQuery = targetUrl.origin + targetUrl.pathname;
       
       // Rewrite relative URLs to absolute, then proxy them
       const lines = content.split('\n');
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
           absoluteUrl = trimmed;
         } else if (trimmed.startsWith('?')) {
-          absoluteUrl = new URL(trimmed, m3u8Url.split('?')[0]).toString();
+          absoluteUrl = new URL(trimmed, baseWithoutQuery).toString();
         } else if (trimmed.startsWith('/')) {
           absoluteUrl = origin + trimmed;
         } else {

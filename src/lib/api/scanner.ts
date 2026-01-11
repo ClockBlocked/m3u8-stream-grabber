@@ -51,7 +51,7 @@ export async function scanForM3U8(url: string): Promise<ScanResponse> {
       lastError = error instanceof Error ? error.message : 'Failed to scan URL';
 
       if (attempt < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 300 * Math.pow(2, attempt - 1)));
+        await new Promise((resolve) => setTimeout(resolve, SCAN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)));
         continue;
       }
 

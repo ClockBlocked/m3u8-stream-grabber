@@ -50,7 +50,7 @@ function collectCookies(headers: Headers): string | undefined {
     .map((cookie) => cookie.split(';')[0]?.trim())
     .filter(Boolean);
 
-  return pairs.length ? pairs.join('; ') : undefined;
+  return pairs.join('; ');
 }
 
 function getBrowserHeaders(targetUrl: string): Record<string, string> {
@@ -215,6 +215,9 @@ Deno.serve(async (req) => {
         try {
           const encoded = match[1];
           if (!BASE64_ALLOWED_REGEX.test(encoded)) {
+            continue;
+          }
+          if (encoded.length % 4 !== 0) {
             continue;
           }
           const decoded = atob(encoded);
