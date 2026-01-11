@@ -136,11 +136,11 @@ Deno.serve(async (req) => {
         } else if (trimmed.startsWith('/')) {
           absoluteUrl = origin + trimmed;
         } else {
-         absoluteUrl = baseUrl + trimmed;
-       }
-       
-       // For .ts segment files, proxy them too
-       // For .m3u8 variant files, proxy them as well
+          absoluteUrl = baseUrl + trimmed;
+        }
+        
+        // For .ts segment files, proxy them too
+        // For .m3u8 variant files, proxy them as well
         const params = new URLSearchParams(baseParams);
         params.set('url', absoluteUrl);
         params.set('referer', referer ? referer : m3u8Url);

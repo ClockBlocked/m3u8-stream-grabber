@@ -22,6 +22,10 @@ const userAgents = [
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 ];
 
+const MIN_DELAY_MS = 100;
+const MAX_RANDOM_DELAY_MS = 400;
+const BASE_BACKOFF_MS = 200;
+
 function getRandomUserAgent(): string {
   return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
@@ -203,7 +207,11 @@ Deno.serve(async (req) => {
       // Base64 encoded M3U8 URLs within JavaScript (e.g., atob calls)
       for (const match of content.matchAll(base64Pattern)) {
         try {
-          const decoded = atob(match[1]);
+          const encoded = match[1];
+          if (!/^[A-Za-z0-9+/=]+$/.test(encoded)) {
+            continue;
+          }
+          const decoded = atob(encoded);
           const decodedMatches = decoded.match(/https?:\/\/[^\s"'<>\\]+\.m3u8(?:\?[^\s"'<>\\]*)?/gi);
           if (decodedMatches) {
             decodedMatches.forEach(addM3U8Url);
@@ -274,7 +282,7 @@ async function analyzeM3U8(url: string, pageUrl: string, cookies?: string): Prom
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await delay(Math.random() * 400 + 100);
+      await delay(Math.random() * MAX_RANDOM_DELAY_MS + MIN_DELAY_MS);
 
       const response = await fetch(url, {
         headers: getM3U8Headers(url, pageUrl, cookies),
@@ -335,7 +343,7 @@ async function analyzeM3U8(url: string, pageUrl: string, cookies?: string): Prom
     } catch (error) {
       lastError = error;
       if (attempt < maxAttempts) {
-        const backoff = 200 * Math.pow(2, attempt - 1);
+        const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt - 1);
         await delay(backoff);
         continue;
       }

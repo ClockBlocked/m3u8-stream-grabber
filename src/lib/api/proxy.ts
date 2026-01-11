@@ -21,8 +21,7 @@ export function getProxiedM3U8Url(m3u8Url: string, referer?: string): string {
   if (anonKey) {
     params.set('apikey', anonKey);
   }
-  
-  // Add the anon key as a query param for authentication
+
   return `${proxyUrl}?${params.toString()}`;
 }
 
